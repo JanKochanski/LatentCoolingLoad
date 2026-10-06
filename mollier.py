@@ -37,12 +37,18 @@ def _shear(p: float) -> float:
     return (h1 - h0) / 0.02 / 1e3
 
 
-def draw_mollier(fig, p_pa, state_in, state_out, state_adp=None):
+def draw_mollier(fig, p_pa, state_in, state_out, state_adp=None, state_limit=None,
+                 adp_label="ADP", state_room=None):
     """Draw a Mollier diagram with the process into a matplotlib Figure.
 
     state_*: tuples (temperature [degC], humidity ratio [kg/kg dry air]).
     state_adp: optional apparatus dew point (surface state), drawn as an
-    extension of the process line.
+    extension of the process line (label via adp_label, e.g. "Surface" for a
+    dry coil whose surface state is not saturated).
+    state_room: optional room-air state; the humidity added by a moisture stream
+    (same temperature, higher x) leads from there to state_in.
+    state_limit: optional ideal-coil limit (BF = 0): the saturated state on the
+    outlet isenthalp, drawn with a dotted isenthalp from the outlet.
     Returns the main Axes.
     """
     s = _shear(p_pa)
@@ -55,7 +61,7 @@ def draw_mollier(fig, p_pa, state_in, state_out, state_adp=None):
         return HAPropsSI("W", "T", t_c + C0, "R", 1.0, "P", p_pa)
 
     # ---- Plot ranges, derived from the process states ----------------------
-    states = [state_in, state_out] + ([state_adp] if state_adp else [])
+    states = [state_in, state_out] + ([state_adp] if state_adp else []) + ([state_limit] if state_limit else []) + ([state_room] if state_room else [])
     t_lo = max(5 * math.floor((min(s_[0] for s_ in states) - 5) / 5), -20)
     t_hi = 5 * math.ceil((max(s_[0] for s_ in states) + 5) / 5)
     x_max_g = max(10.0, 2 * math.ceil(max(s_[1] for s_ in states) * 1000 * 1.3 / 2))
@@ -105,6 +111,12 @@ def draw_mollier(fig, p_pa, state_in, state_out, state_adp=None):
     # ---- Process -------------------------------------------------------------
     p_in = xy(*state_in)
     p_out = xy(*state_out)
+    if state_room is not None:
+        p_room = xy(*state_room)
+        ax.plot([p_room[0], p_in[0]], [p_room[1], p_in[1]], color="#777777", lw=1.4, ls="--", zorder=6)
+        ax.scatter(*p_room, color="#777777", zorder=7)
+        ax.annotate(f"Room ({state_room[0]:.1f} °C)", p_room, textcoords="offset points",
+                    xytext=(-8, 6), fontsize=8, color="#555555", ha="right", zorder=7)
     ax.annotate("", xy=p_out, xytext=p_in, zorder=6,
                 arrowprops=dict(arrowstyle="-|>", color="#c00000", lw=2))
     ax.scatter(*p_in, color="#c00000", zorder=7)
@@ -112,14 +124,21 @@ def draw_mollier(fig, p_pa, state_in, state_out, state_adp=None):
     ax.annotate(f"In ({state_in[0]:.1f} °C)", p_in, textcoords="offset points",
                 xytext=(6, 6), fontsize=8, color="#c00000", zorder=7)
     ax.annotate(f"Out ({state_out[0]:.1f} °C)", p_out, textcoords="offset points",
-                xytext=(6, -12), fontsize=8, color="#c00000", zorder=7)
+                xytext=(8, 3), fontsize=8, color="#c00000", zorder=7)
     if state_adp is not None:
         p_adp = xy(*state_adp)
         ax.plot([p_out[0], p_adp[0]], [p_out[1], p_adp[1]], color="#c00000",
                 lw=1.2, ls="--", zorder=6)
         ax.scatter(*p_adp, color="#c00000", marker="s", zorder=7)
-        ax.annotate(f"ADP ({state_adp[0]:.1f} °C)", p_adp, textcoords="offset points",
+        ax.annotate(f"{adp_label} ({state_adp[0]:.1f} °C)", p_adp, textcoords="offset points",
                     xytext=(-8, 8), fontsize=8, color="#c00000", ha="right", zorder=7)
+    if state_limit is not None:
+        p_lim = xy(*state_limit)
+        ax.plot([p_out[0], p_lim[0]], [p_out[1], p_lim[1]], color="#444444",
+                lw=1.0, ls=":", zorder=6)
+        ax.scatter(*p_lim, color="#444444", marker="D", s=22, zorder=7)
+        ax.annotate(f"BF=0 limit ({state_limit[0]:.1f} °C)", p_lim, textcoords="offset points",
+                    xytext=(8, -12), fontsize=8, color="#444444", zorder=7)
 
     # ---- Axes ------------------------------------------------------------------
     ax.set_xlim(0, x_max_g)
